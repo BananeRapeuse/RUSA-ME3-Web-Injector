@@ -1,18 +1,186 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>R/S ME3 Injector</title><style>body{margin:0;background:#0b0e14;color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:20px}.wrap{max-width:720px;margin:auto}h1{text-align:center}.card{background:#151a24;border:1px solid #2b3444;border-radius:18px;padding:16px;margin:12px 0}label,.btn{display:block;background:#1c2330;border:1px solid #303b4e;border-radius:13px;padding:14px;margin:8px 0;cursor:pointer}.btn{width:100%;color:white;font-weight:800;font-size:16px}.primary{background:#59e58a;color:#07100a;border:0}input{display:none}.name{font-weight:700}.muted{color:#929cad;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#1b2230;padding:10px;border-radius:10px}.log{white-space:pre-wrap;background:#080a0e;padding:12px;border-radius:12px;font:11px monospace;max-height:360px;overflow:auto}.ok{color:#5ee58a}.warn{color:#ffd166}.bad{color:#ff6877}</style></head><body><div class="wrap"><h1>🧬 R/S ME3 Injector</h1><p class="muted">Pokémon Rubis / Saphir · tout est traité localement dans Safari</p><div class="card"><b>💾 Sauvegarde .sav</b><label for="save">Choisir la sauvegarde<div class="name" id="sn">Aucun fichier</div></label><input id="save" type="file"><div class="grid"><div class="stat">Taille<br><b id="ss">—</b></div><div class="stat">R/S<br><b id="sf">—</b></div></div></div><div class="card"><b>✨ Event.me3</b><label for="me3">Choisir le ME3<div class="name" id="mn">Aucun fichier</div></label><input id="me3" type="file"><div class="grid"><div class="stat">Taille<br><b id="ms">—</b></div><div class="stat">Checksum<br><b id="mc">—</b></div></div></div><div class="card"><label style="display:flex;gap:10px"><input id="activate" type="checkbox" style="display:block;width:20px;height:20px"><span><b>Activer Mystery Event</b><br><span class="muted">R/S : Section 2, offset 0x3A9, bit 4.</span></span></label><button class="btn primary" id="go" disabled>💉 INJECTER</button><button class="btn" id="diag">🔬 DIAGNOSTIC</button></div><div class="card"><div id="log" class="log">En attente…</div></div></div><script>
-const S=0x20000,B=0xE000,Q=0x1000,FOOT=0xFF4,ID=0,DATA=0xF80,SEC4=4,SEC2=2,ME=0x810,ME_LEN=1004,FLAG=0x3A9,FLAGBIT=0x10;
-const tab=[0x2113,0xff00,0xfc31,0x1311,0xa950,0xf390,0x0b70,0xfb00,0xe700,0xd0fe,0x0002,0xe00f,0x1012,0x90ac,0x10d6,0xf0bc,0x2001,0xcc0b,0x00c0,0xcccc,0xc013,0xc010,0x1330,0x011f,0x0000,0x0cf0,0x1720,0x17d0,0x33f0,0x1980,0x64ff,0xf01b,0xf13b,0xc13b,0x4006,0xf137,0x2137,0x412f,0x1119,0xff10,0x0640,0x0ad1,0x3731,0x1760,0xfa00,0x0721,0x2301,0x0cfd,0x1006,0x0010,0x01ed,0x101c,0x512f,0xc1fc,0xc021,0x1fde,0x00bd,0x700f,0xc021,0x2f11,0x3210,0x1560,0x18cc,0x33cc,0x0c90,0x0fb0,0x01b0,0xbbf0,0x1300,0x1322,0xbbbb,0x1001,0x00bb,0x0bb0,0x17b0,0xef50,0x17d0,0x3230,0x17bb,0xb02f,0xf01e,0xf019,0x6462,0xfff1,0x6310,0x1111,0x5c41,0x4611,0x3b12,0x8c41,0x3f41,0x3bfc,0x1129,0x412d,0xb006,0xf253,0x5253,0x1127,0x00cc,0x7f0c,0x312e,0x0241,0x0004,0x1007,0x5123,0x8253,0x20ba,0xff91,0x0021,0x1b01,0x0400,0x0200,0xd340,0x1c90,0x0ff0,0xff40,0xaaf0,0x1200,0xaa00,0xa0aa,0xaa8f,0x0001,0x0aaa,0xaa80,0x1500,0x1340,0x1600,0x20bf,0xa02f,0xa030,0x1720,0x1af0,0x4c40,0x1af0,0x19e6,0xc7ff,0xb167,0x400a,0xf2c7,0x52c3,0x42c7,0x4178,0xf183,0x6183,0xff11,0x6df1,0x7fb2,0xb342,0xaf71,0x7b60,0x06f1,0x7771];
-let save=null,event=null,info=null;
-const $=x=>document.getElementById(x), hx=(x,n=4)=>'0x'+x.toString(16).toUpperCase().padStart(n,'0');
-const u16=(a,o)=>a[o]|a[o+1]<<8; const set16=(a,o,v)=>{a[o]=v&255;a[o+1]=v>>8&255};
-function secsum(a,o,id){let len=id===0?3884:id===13?2000:3968,sum=0;for(let p=0;p<len;p+=4)sum=(sum+(a[o+p] | a[o+p+1]<<8 | a[o+p+2]<<16 | a[o+p+3]<<24)>>>0);sum=(sum+(sum>>>16))>>>0;return sum&65535}
-function sections(a,bo){let r=[];for(let i=0;i<14;i++){let o=bo+i*Q,id=u16(a,o+FOOT);r.push({o,id,ok:u16(a,o+FOOT+2)===secsum(a,o,id),idx:(a[o+FOOT+12]|a[o+FOOT+13]<<8|a[o+FOOT+14]<<16|a[o+FOOT+15]<<24)>>>0})}return r}
-function blocks(a){return [sections(a,0),sections(a,B)]}
-function meChecksum(bytes){let seed=0x8530;for(let i=0;i<bytes.length;i++){let ti=(bytes[i]^seed)&255,v=tab[ti];let rev=((v&255)<<8)|(v>>8);seed=(rev^(seed>>16))&65535}return (~seed)&65535}
-function fixEvent(e){let c=meChecksum(e.slice(4,1004));set16(e,0,c);return c}
-function find(bl,id){return bl.find(x=>x.id===id)}
-function log(t,c=''){let d=document.createElement('div');d.textContent=t;if(c)d.className=c;$('log').appendChild(d)}
-$('save').onchange=async()=>{let f=$('save').files[0];if(!f)return;save=new Uint8Array(await f.arrayBuffer());$('sn').textContent=f.name;$('ss').textContent=save.length.toLocaleString('fr-FR')+' o';info=save.length===S?blocks(save):null;$('sf').textContent=info?'R/S Gen III':'❌ taille invalide';log(info?'✅ Save 0x20000 reconnue.':'❌ La save doit faire exactement 131072 octets.',info?'ok':'bad');$('go').disabled=!(info&&event)};
-$('me3').onchange=async()=>{let f=$('me3').files[0];if(!f)return;event=new Uint8Array(await f.arrayBuffer());$('mn').textContent=f.name;$('ms').textContent=event.length+' o';if(event.length===1004){let c=meChecksum(event.slice(4));$('mc').textContent=hx(u16(event,0))+' / '+hx(c);log(u16(event,0)===c?'✅ ME3 checksum valide.':'⚠️ checksum ME3 sera corrigé.',u16(event,0)===c?'ok':'warn')}else{$('mc').textContent='❌ taille';log('❌ Un script ME3 doit faire 1004 octets.', 'bad')}$('go').disabled=!(info&&event&&event.length===1004)};
-$('diag').onclick=()=>{ $('log').innerHTML='';if(!save){log('❌ Aucune save.','bad');return}if(!info){log('❌ Save invalide.','bad');return}blocks(save).forEach((bl,i)=>{log('── BLOC '+(i?'B':'A')+' ──');bl.forEach(s=>log('ID '+s.id+' '+hx(s.o)+' checksum '+(s.ok?'OK':'BAD')+' index '+s.idx,s.ok?'ok':'warn'));let s4=find(bl,4),s2=find(bl,2);if(s4){let e=save.slice(s4.o+ME,s4.o+ME+1004);log('ME3 cible: '+hx(s4.o+ME)+' checksum '+hx(u16(e,0))+' calculé '+hx(meChecksum(e.slice(4))),u16(e,0)===meChecksum(e.slice(4))?'ok':'warn')}if(s2)log('Activation byte: '+hx(s2.o+FLAG)+' = '+hx(save[s2.o+FLAG],2)+' bit4='+(!!(save[s2.o+FLAG]&FLAGBIT)));})};
-$('go').onclick=()=>{try{$('log').innerHTML='';let out=new Uint8Array(save),activate=$('activate').checked;for(let bi=0;bi<2;bi++){let bl=sections(out,bi?B:0),s4=find(bl,4),s2=find(bl,2);if(!s4)throw Error('Section 4 introuvable dans bloc '+(bi?'B':'A'));let e=event.slice();let c=fixEvent(e);out.set(e,s4.o+ME);if(activate&&s2){out[s2.o+FLAG]|=FLAGBIT;set16(out,s2.o+FOOT+2,secsum(out,s2.o,s2.id))}set16(out,s4.o+FOOT+2,secsum(out,s4.o,s4.id));log('✅ Bloc '+(bi?'B':'A')+' : ME3 → '+hx(s4.o+ME)+' checksum '+hx(c),'ok')}let check=blocks(out);for(let bi=0;bi<2;bi++){for(let s of check[bi])if(!s.ok)throw Error('Checksum invalide après injection dans le bloc '+(bi?'B':'A')+' ID '+s.id)}let blob=new Blob([out],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Ruby_Sapphire_ME3_injected.sav';a.click();URL.revokeObjectURL(url);log('🎉 Injection terminée. Fichier téléchargé.','ok');log(activate?'🔓 Mystery Event activé (Section 2 + 0x3A9 bit 4).':'ℹ️ Activation non modifiée.');}catch(e){log('❌ '+e.message,'bad')}};
-</script></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090c12">
+<title>R/S ME3 Injector V3</title>
+<style>
+:root{color-scheme:dark;--bg:#090c12;--card:#121722;--card2:#191f2b;--line:#2a3445;--txt:#f5f7fb;--muted:#929caf;--green:#60e58b;--blue:#5bbcff;--yellow:#ffd166;--red:#ff6f7d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -8%,#1a2535 0,#090c12 45%);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding:max(16px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}.wrap{max-width:760px;margin:auto}header{text-align:center;padding:12px 0 20px}.logo{font-size:42px}h1{font-size:27px;letter-spacing:-.7px;margin:3px 0 5px}.sub{color:var(--muted);font-size:12px}.badge{display:inline-block;margin-top:9px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px}.card{background:rgba(18,23,34,.95);border:1px solid var(--line);border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 16px 40px #0003}.title{font-size:16px;font-weight:850;margin-bottom:12px}
+
+/* Modification CSS : Masquage accessible pour input file au lieu de display:none */
+.file_input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.file{display:flex;gap:12px;align-items:center;min-height:68px;padding:12px 14px;background:var(--card2);border:1px solid var(--line);border-radius:15px;cursor:pointer;position:relative}.file:active{transform:scale(.99)}.icon{font-size:26px}.fi{min-width:0}.label{font-size:11px;color:var(--muted)}.name{font-size:13px;font-weight:750;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.stat{background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:10px}.k{font-size:10px;color:var(--muted)}.v{font-size:12px;font-weight:800;margin-top:4px}.ok{color:var(--green)}.warn{color:var(--yellow)}.bad{color:var(--red)}.small{font-size:12px;color:var(--muted);line-height:1.55}.check{display:flex;gap:10px;align-items:flex-start;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}.check input{width:19px;height:19px;margin:1px 0 0;accent-color:var(--green)}.check b{font-size:13px}.check span{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:3px}button{font:inherit}.primary{width:100%;min-height:57px;border:0;border-radius:15px;background:var(--green);color:#061009;font-size:15px;font-weight:900;cursor:pointer}.primary:disabled{opacity:.32;cursor:not-allowed}.secondary{width:100%;min-height:48px;border:1px solid var(--line);border-radius:14px;background:var(--card2);color:var(--txt);font-weight:800;margin-top:9px;cursor:pointer}.log{background:#07090d;border:1px solid var(--line);border-radius:14px;padding:12px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;max-height:360px;overflow:auto;white-space:pre-wrap}.success{border-color:#60e58b55;background:#60e58b0d}.hidden{display:none}code{font-family:ui-monospace,monospace;color:var(--blue)}@media(max-width:470px){.grid{grid-template-columns:1fr}h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><div class="logo">🧬</div><h1>R/S ME3 Injector V3</h1><div class="sub">Pokémon Rubis / Saphir · traitement 100 % local dans Safari</div><div class="badge">📱 aucun filtre d’extension iOS</div></header>
+
+<section class="card">
+<div class="title">💾 Sauvegarde Rubis / Saphir</div>
+<label class="file">
+  <input id="save" type="file" class="file_input">
+  <div class="icon">🎮</div>
+  <div class="fi">
+    <div class="label">Choisir la sauvegarde</div>
+    <div class="name" id="saveName">Aucun fichier</div>
+  </div>
+</label>
+<div class="grid"><div class="stat"><div class="k">Taille</div><div class="v" id="saveSize">—</div></div><div class="stat"><div class="k">Format</div><div class="v" id="saveFmt">—</div></div><div class="stat"><div class="k">Zone save</div><div class="v" id="saveZone">—</div></div><div class="stat"><div class="k">Blocs</div><div class="v" id="blocks">—</div></div></div>
+</section>
+
+<section class="card">
+<div class="title">✨ Mystery Event</div>
+<label class="file">
+  <input id="me3" type="file" class="file_input">
+  <div class="icon">📦</div>
+  <div class="fi">
+    <div class="label">Choisir le fichier .me3</div>
+    <div class="name" id="me3Name">Aucun fichier</div>
+  </div>
+</label>
+<div class="grid"><div class="stat"><div class="k">Taille</div><div class="v" id="me3Size">—</div></div><div class="stat"><div class="k">ME3</div><div class="v" id="mePart">—</div></div><div class="stat"><div class="k">RM3</div><div class="v" id="rmPart">—</div></div><div class="stat"><div class="k">Checksum</div><div class="v" id="meChecksum">—</div></div></div>
+</section>
+
+<section class="card">
+<div class="title">⚙️ Injection</div>
+<label class="check"><input id="activate" type="checkbox"><div><b>Activer le Mystery Event</b><span>Option séparée de l'injection. Elle ne sera appliquée qu'après détection correcte de la structure R/S.</span></div></label>
+<button class="primary" id="inject" disabled>💉 INJECTER</button>
+<button class="secondary" id="diag">🔬 DIAGNOSTIC COMPLET</button>
+</section>
+
+<section class="card success hidden" id="result"><div class="title ok">✅ Sauvegarde prête</div><div class="small" id="resultText"></div><button class="primary" id="download">💾 Télécharger la sauvegarde</button></section>
+
+<section class="card"><div class="title">📋 Journal</div><div class="log" id="log">En attente...</div></section>
+</div>
+
+<script>
+'use strict';
+
+const SAVE_CORE=0x20000;
+const SAVE_WITH_16=0x20010;
+const BLOCK=0xE000;
+const SECTOR=0x1000;
+const DATA=0xFF4;
+const ID=0xFF4;
+const CS=0xFF6;
+const SIG=0xFF8;
+const CTR=0xFFC;
+const SECTION_ME=4;
+const SECTION_FLAGS=2;
+const ME_REL=0x810;
+const ME_LEN=1004;
+const RM_REL=0xBFC;
+const RM_LEN=8;
+
+let rawSave=null, saveView=null, saveInfo=null, rawMe=null, meInfo=null, output=null;
+
+const $=id=>document.getElementById(id);
+function hx(n,w=4){return '0x'+n.toString(16).toUpperCase().padStart(w,'0')}
+function u16(a,o){return (a[o]|a[o+1]<<8)>>>0}
+function u32(a,o){return (a[o]|a[o+1]<<8|a[o+2]<<16|a[o+3]<<24)>>>0}
+function setU16(a,o,v){a[o]=v&255;a[o+1]=(v>>>8)&255}
+function setU32(a,o,v){a[o]=v&255;a[o+1]=(v>>>8)&255;a[o+2]=(v>>>16)&255;a[o+3]=(v>>>24)&255}
+function log(s,c=''){let d=document.createElement('div');d.textContent=s;if(c==='ok')d.style.color='#60e58b';if(c==='warn')d.style.color='#ffd166';if(c==='bad')d.style.color='#ff6f7d';$('log').appendChild(d);$('log').scrollTop=$('log').scrollHeight}
+function clearLog(){$('log').innerHTML=''}
+
+function sectionChecksum(a,off){
+  let sum=0;
+  for(let p=off;p<off+DATA;p+=4) sum=(sum+u32(a,p))>>>0;
+  sum=(sum+(sum>>>16))>>>0;
+  return sum&0xffff;
+}
+function section(a,off){
+  const id=u16(a,off+ID),stored=u16(a,off+CS),calc=sectionChecksum(a,off);
+  return {off,id,stored,calc,valid:stored===calc,counter:u32(a,off+CTR),sig:u32(a,off+SIG)};
+}
+function inspectBlock(a,off){
+  const ss=[];for(let i=0;i<14;i++)ss.push(section(a,off+i*SECTOR));
+  const ids=new Set(ss.map(x=>x.id));
+  return {off,sections:ss,complete:[...Array(14).keys()].every(x=>ids.has(x)),me:ss.find(x=>x.id===SECTION_ME),flags:ss.find(x=>x.id===SECTION_FLAGS)};
+}
+function inspectCore(a){
+  if(a.length<SAVE_CORE)return null;
+  const A=inspectBlock(a,0),B=inspectBlock(a,BLOCK);
+  return {A,B,ok:A.complete||B.complete};
+}
+
+function detectSave(bytes){
+  const candidates=[];
+  if(bytes.length>=SAVE_CORE)candidates.push({kind:'raw-0x20000',start:0,core:bytes.slice(0,SAVE_CORE)});
+  if(bytes.length===SAVE_WITH_16){
+    candidates.push({kind:'wrapper-prefix-16',start:16,core:bytes.slice(16,16+SAVE_CORE)});
+    candidates.push({kind:'wrapper-suffix-16',start:0,core:bytes.slice(0,SAVE_CORE)});
+  }
+  let best=null;
+  for(const c of candidates){const i=inspectCore(c.core);if(i?.ok){let score=0;for(const b of [i.A,i.B])if(b.complete)score+=100;for(const b of [i.A,i.B])for(const s of b.sections)if(s.valid)score+=1;if(!best||score>best.score)best={...c,info:i,score}}}
+  return best;
+}
+
+function detectME(bytes){
+  if(bytes.length!==1004&&bytes.length!==1012)return {ok:false,reason:'Taille attendue : 1004 ou 1012 octets.'};
+  const me=bytes.slice(0,1004),rm=bytes.length===1012?bytes.slice(1004):null;
+  return {ok:true,me,rm,size:bytes.length};
+}
+
+function update(){
+  $('inject').disabled=!(saveInfo?.ok&&meInfo?.ok);
+  if(rawSave){$('saveSize').textContent=rawSave.length.toLocaleString('fr-FR')+' o'}
+  if(saveInfo?.ok){$('saveFmt').textContent='R/S détecté';$('saveFmt').className='v ok';$('saveZone').textContent=saveInfo.kind;$('blocks').textContent=(saveInfo.info.A.complete?'A':'')+(saveInfo.info.B.complete?' + B':'')||'—'}
+  else if(rawSave){$('saveFmt').textContent='❌ invalide';$('saveFmt').className='v bad';$('saveZone').textContent='—';$('blocks').textContent='—'}
+  if(rawMe){$('me3Size').textContent=rawMe.length+' o';if(meInfo?.ok){$('mePart').textContent='1004 o ✅';$('rmPart').textContent=meInfo.rm?'8 o ✅':'—';$('meChecksum').textContent='ME3 détecté'}else{$('mePart').textContent='❌';$('rmPart').textContent='—';$('meChecksum').textContent='—'}}
+}
+
+$('save').addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;clearLog();$('saveName').textContent=f.name;rawSave=new Uint8Array(await f.arrayBuffer());saveInfo=detectSave(rawSave);saveView=saveInfo?.core||null;update();
+  if(saveInfo?.ok){log('✅ Structure R/S détectée.','ok');log(`📦 ${saveInfo.kind} · cœur 0x${SAVE_CORE.toString(16).toUpperCase()}`);for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){log(`Bloc ${n}: ${b.complete?'14 sections détectées':'structure incomplète'}`,b.complete?'ok':'warn');if(b.me)log(`  Section 4: ${hx(b.me.off)} · ME cible ${hx(b.me.off+ME_REL)}`,'ok')}}else log('❌ La structure R/S n’a pas été reconnue dans ce fichier.','bad');
+});
+
+$('me3').addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;clearLog();$('me3Name').textContent=f.name;rawMe=new Uint8Array(await f.arrayBuffer());meInfo=detectME(rawMe);update();if(meInfo.ok){log(`✅ ME3 reconnu : ${meInfo.size} octets.`,'ok');if(meInfo.rm)log('   + RM3 : 8 octets présents.','ok')}else log(`❌ ${meInfo.reason}`,'bad');
+});
+
+function diagnostic(){
+  clearLog();log('════════ R/S ME3 V3 ════════');
+  if(!saveInfo?.ok)log('❌ Save : structure non reconnue.','bad');else{
+    log(`💾 Save : ${rawSave.length} octets · ${saveInfo.kind}`,'ok');
+    for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
+      log(`── Bloc ${n} ──`);for(const s of b.sections)log(`ID ${s.id} @ ${hx(s.off)} · CS ${s.valid?'OK':'BAD'} · ctr ${s.counter}`,s.valid?'ok':'warn');
+      if(b.me)log(`ME3 cible = ${hx(b.me.off+ME_REL)}`,'ok');
+      if(b.flags){const p=b.flags.off+0x3A9;log(`Flags +0x3A9 = ${hx(saveView[p],2)}`)}
+    }
+  }
+  if(meInfo?.ok){log(`✨ ME3 = ${meInfo.size} octets`,'ok');log(meInfo.rm?'RM3 = 8 octets présents':'RM3 absent');}else log('❌ ME3 non reconnu.','bad');
+}
+
+function inject(){
+  clearLog();$('result').classList.add('hidden');output=null;
+  if(!saveInfo?.ok||!meInfo?.ok)throw Error('Sélectionne une save R/S et un ME3 valides.');
+  const core=new Uint8Array(saveView);
+  const me=meInfo.me.slice();
+  const active=$('activate').checked;
+  const targets=[];
+  for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
+    if(!b.complete||!b.me)continue;
+    const at=b.me.off+ME_REL;core.set(me,at);targets.push({n,b,at});
+    if(meInfo.rm)core.set(meInfo.rm,b.me.off+RM_REL);
+    const cs=sectionChecksum(core,b.me.off);setU16(core,b.me.off+CS,cs);
+    if(active&&b.flags){const p=b.flags.off+0x3A9;core[p]|=0x10;setU16(core,b.flags.off+CS,sectionChecksum(core,b.flags.off))}
+    log(`✅ ${n}: ME3 copié à ${hx(at)}`,'ok');log(`   checksum section 4 recalculé: ${hx(cs)}`,'ok');
+  }
+  if(!targets.length)throw Error('Aucune section 4 exploitable.');
+  output=new Uint8Array(rawSave);
+  output.set(core,saveInfo.start);
+  $('resultText').innerHTML='Injection structurelle effectuée sur les blocs détectés.<br><b>⚠️ V3 est expérimentale :</b> le checksum validé ne garantit pas à lui seul que le Mystery Event sera reconnu par le jeu.';
+  $('result').classList.remove('hidden');log('🎉 Fichier généré.','ok');
+}
+$('diag').onclick=()=>{try{diagnostic()}catch(e){log('❌ '+e.message,'bad')}};
+$('inject').onclick=()=>{try{inject()}catch(e){log('❌ '+e.message,'bad')}};
+$('download').onclick=()=>{if(!output)return;const b=new Blob([output],{type:'application/octet-stream'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='Sapphire_RS_ME3_V3.sav';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+update();
+</script>
+</body>
+</html>
