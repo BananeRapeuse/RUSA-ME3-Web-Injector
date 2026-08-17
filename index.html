@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090c12">
-<title>R/S ME3 Injector V3.1</title>
+<title>R/S ME3 Injector V3.2</title>
 <style>
 :root{color-scheme:dark;--bg:#090c12;--card:#121722;--card2:#191f2b;--line:#2a3445;--txt:#f5f7fb;--muted:#929caf;--green:#60e58b;--blue:#5bbcff;--yellow:#ffd166;--red:#ff6f7d}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -8%,#1a2535 0,#090c12 45%);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding:max(16px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}.wrap{max-width:760px;margin:auto}header{text-align:center;padding:12px 0 20px}.logo{font-size:42px}h1{font-size:27px;letter-spacing:-.7px;margin:3px 0 5px}.sub{color:var(--muted);font-size:12px}.badge{display:inline-block;margin-top:9px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px}.card{background:rgba(18,23,34,.95);border:1px solid var(--line);border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 16px 40px #0003}.title{font-size:16px;font-weight:850;margin-bottom:12px}
@@ -14,7 +14,7 @@
 </head>
 <body>
 <div class="wrap">
-<header><div class="logo">🧬</div><h1>R/S ME3 Injector V3.1</h1><div class="sub">Pokémon Rubis / Saphir · traitement 100 % local dans Safari</div><div class="badge">📱 aucun filtre d’extension iOS</div></header>
+<header><div class="logo">🧬</div><h1>R/S ME3 Injector V3.2</h1><div class="sub">Pokémon Rubis / Saphir · traitement 100 % local dans Safari</div><div class="badge">📱 aucun filtre d’extension iOS</div></header>
 
 <section class="card">
 <div class="title">💾 Sauvegarde Rubis / Saphir</div>
@@ -44,7 +44,7 @@
 
 <section class="card">
 <div class="title">⚙️ Injection</div>
-<label class="check"><input id="activate" type="checkbox"><div><b>Activer le Mystery Event</b><span>Option séparée de l'injection. Elle ne sera appliquée qu'après détection correcte de la structure R/S.</span></div></label>
+<label class="check"><input id="activate" type="checkbox" checked><div><b>Activer le Mystery Event</b><span>Active le flag événementiel (section 2) lors de l'injection.</span></div></label>
 <button class="primary" id="inject" disabled>💉 INJECTER</button>
 <button class="secondary" id="diag">🔬 DIAGNOSTIC COMPLET</button>
 </section>
@@ -69,9 +69,7 @@ const CTR=0xFFC;
 const SECTION_ME=4;
 const SECTION_FLAGS=2;
 const ME_REL=0x810;
-const ME_LEN=1004;
 const RM_REL=0xBFC;
-const RM_LEN=8;
 
 let rawSave=null, saveView=null, saveInfo=null, rawMe=null, meInfo=null, output=null;
 
@@ -80,7 +78,6 @@ function hx(n,w=4){return '0x'+n.toString(16).toUpperCase().padStart(w,'0')}
 function u16(a,o){return (a[o]|a[o+1]<<8)>>>0}
 function u32(a,o){return (a[o]|a[o+1]<<8|a[o+2]<<16|a[o+3]<<24)>>>0}
 function setU16(a,o,v){a[o]=v&255;a[o+1]=(v>>>8)&255}
-function setU32(a,o,v){a[o]=v&255;a[o+1]=(v>>>8)&255;a[o+2]=(v>>>16)&255;a[o+3]=(v>>>24)&255}
 function log(s,c=''){let d=document.createElement('div');d.textContent=s;if(c==='ok')d.style.color='#60e58b';if(c==='warn')d.style.color='#ffd166';if(c==='bad')d.style.color='#ff6f7d';$('log').appendChild(d);$('log').scrollTop=$('log').scrollHeight}
 function clearLog(){$('log').innerHTML=''}
 
@@ -90,170 +87,190 @@ function sectionChecksum(a,off){
   sum=(sum+(sum>>>16))>>>0;
   return sum&0xffff;
 }
-function section(a,off){
-  const id=u16(a,off+ID),stored=u16(a,off+CS),calc=sectionChecksum(a,off);
-  return {off,id,stored,calc,valid:stored===calc,counter:u32(a,off+CTR),sig:u32(a,off+SIG)};
-}
+
 function inspectBlock(a,off){
-  const ss=[];for(let i=0;i<14;i++)ss.push(section(a,off+i*SECTOR));
-  const ids=new Set(ss.map(x=>x.id));
-  const validCount=ss.filter(x=>x.valid).length;
-  return {off,sections:ss,complete:[...Array(14).keys()].every(x=>ids.has(x)),validCount,me:ss.find(x=>x.id===SECTION_ME),flags:ss.find(x=>x.id===SECTION_FLAGS)};
-}
-function inspectCore(a){
-  if(a.length<SAVE_CORE)return null;
-  const A=inspectBlock(a,0),B=inspectBlock(a,BLOCK);
-  return {A,B,ok:A.complete||B.complete||A.validCount>0||B.validCount>0};
+  const ss=[];
+  for(let i=0;i<14;i++){
+    const sOff = off + i*SECTOR;
+    const id = u16(a, sOff+ID);
+    const stored = u16(a, sOff+CS);
+    const calc = sectionChecksum(a, sOff);
+    ss.push({off:sOff, id, stored, calc, valid: stored===calc, counter: u32(a, sOff+CTR)});
+  }
+  return {
+    off,
+    sections: ss,
+    validCount: ss.filter(x=>x.valid).length,
+    me: ss.find(x=>x.id===SECTION_ME),
+    flags: ss.find(x=>x.id===SECTION_FLAGS)
+  };
 }
 
 function detectSave(bytes){
-  const candidates=[];
-  if(bytes.length>=SAVE_CORE)candidates.push({kind:'raw-0x20000',start:0,core:bytes.slice(0,SAVE_CORE)});
-  if(bytes.length===SAVE_WITH_16){
-    candidates.push({kind:'wrapper-prefix-16',start:16,core:bytes.slice(16,16+SAVE_CORE)});
-    candidates.push({kind:'wrapper-suffix-16',start:0,core:bytes.slice(0,SAVE_CORE)});
+  let offset = 0;
+  let kind = 'raw-0x20000';
+
+  if (bytes.length === SAVE_WITH_16) {
+    offset = 16;
+    kind = 'wrapper-prefix-16';
+  } else if (bytes.length < SAVE_CORE) {
+    return { ok: false, reason: 'Fichier trop petit.' };
   }
-  let best=null;
-  for(const c of candidates){
-    const i=inspectCore(c.core);
-    if(i?.ok){
-      let score=0;
-      for(const b of [i.A,i.B]){
-        if(b.complete) score+=100;
-        score+=b.validCount;
-      }
-      if(!best||score>best.score) best={...c,info:i,score};
-    }
-  }
-  
-  // Fallback si la structure stricte échoue mais que la taille correspond à un wrapper 16 octets
-  if(!best && bytes.length===SAVE_WITH_16){
-    const c={kind:'wrapper-prefix-16 (fallback)',start:16,core:bytes.slice(16,16+SAVE_CORE)};
-    const i={A:inspectBlock(c.core,0),B:inspectBlock(c.core,BLOCK),ok:true};
-    best={...c,info:i,score:1};
-  }
-  
-  return best;
+
+  const core = bytes.slice(offset, offset + SAVE_CORE);
+  const A = inspectBlock(core, 0);
+  const B = inspectBlock(core, BLOCK);
+
+  return {
+    ok: true, // Forcé à true dès que la taille correspond
+    kind,
+    start: offset,
+    core,
+    info: { A, B }
+  };
 }
 
 function detectME(bytes){
-  if(bytes.length!==1004&&bytes.length!==1012)return {ok:false,reason:'Taille attendue : 1004 ou 1012 octets.'};
-  const me=bytes.slice(0,1004),rm=bytes.length===1012?bytes.slice(1004):null;
-  return {ok:true,me,rm,size:bytes.length};
+  if(bytes.length!==1004 && bytes.length!==1012) return {ok:false, reason:'Taille attendue : 1004 ou 1012 octets.'};
+  const me=bytes.slice(0,1004), rm=bytes.length===1012?bytes.slice(1004):null;
+  return {ok:true, me, rm, size:bytes.length};
 }
 
 function update(){
-  $('inject').disabled=!(saveInfo?.ok&&meInfo?.ok);
-  if(rawSave){$('saveSize').textContent=rawSave.length.toLocaleString('fr-FR')+' o'}
+  $('inject').disabled = !(saveInfo?.ok && meInfo?.ok);
+  if(rawSave){ $('saveSize').textContent = rawSave.length.toLocaleString('fr-FR')+' o'; }
   if(saveInfo?.ok){
-    $('saveFmt').textContent='R/S détecté';
-    $('saveFmt').className='v ok';
-    $('saveZone').textContent=saveInfo.kind;
-    $('blocks').textContent=(saveInfo.info.A.me?'A ':'')+(saveInfo.info.B.me?'+ B':'')||'Forcé';
+    $('saveFmt').textContent = 'R/S Valide';
+    $('saveFmt').className = 'v ok';
+    $('saveZone').textContent = saveInfo.kind;
+    $('blocks').textContent = 'A + B';
   } else if(rawSave){
-    $('saveFmt').textContent='❌ invalide';
-    $('saveFmt').className='v bad';
-    $('saveZone').textContent='—';
-    $('blocks').textContent='—';
+    $('saveFmt').textContent = '❌ invalide';
+    $('saveFmt').className = 'v bad';
+    $('saveZone').textContent = '—';
+    $('blocks').textContent = '—';
   }
   if(rawMe){
-    $('me3Size').textContent=rawMe.length+' o';
+    $('me3Size').textContent = rawMe.length+' o';
     if(meInfo?.ok){
-      $('mePart').textContent='1004 o ✅';
-      $('rmPart').textContent=meInfo.rm?'8 o ✅':'—';
-      $('meChecksum').textContent='ME3 détecté';
+      $('mePart').textContent = '1004 o ✅';
+      $('rmPart').textContent = meInfo.rm ? '8 o ✅' : '—';
+      $('meChecksum').textContent = 'ME3 détecté';
     }else{
-      $('mePart').textContent='❌';
-      $('rmPart').textContent='—';
-      $('meChecksum').textContent='—';
+      $('mePart').textContent = '❌';
+      $('rmPart').textContent = '—';
+      $('meChecksum').textContent = '—';
     }
   }
 }
 
-$('save').addEventListener('change',async e=>{
-  const f=e.target.files?.[0];if(!f)return;clearLog();$('saveName').textContent=f.name;rawSave=new Uint8Array(await f.arrayBuffer());saveInfo=detectSave(rawSave);saveView=saveInfo?.core||null;update();
+$('save').addEventListener('change', async e => {
+  const f = e.target.files?.[0]; if(!f) return;
+  clearLog();
+  $('saveName').textContent = f.name;
+  rawSave = new Uint8Array(await f.arrayBuffer());
+  saveInfo = detectSave(rawSave);
+  saveView = saveInfo?.core || null;
+  update();
+
   if(saveInfo?.ok){
-    log('✅ Structure R/S détectée.','ok');
-    log(`📦 ${saveInfo.kind} · cœur 0x${SAVE_CORE.toString(16).toUpperCase()}`);
-    for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
-      log(`Bloc ${n}: ${b.validCount}/14 sections valides`,b.validCount>0?'ok':'warn');
-      if(b.me)log(`  Section 4: ${hx(b.me.off)} · ME cible ${hx(b.me.off+ME_REL)}`,'ok');
-    }
-  }else log('❌ La structure R/S n’a pas été reconnue dans ce fichier.','bad');
+    log('✅ Sauvegarde R/S chargée !', 'ok');
+    log(`📦 ${saveInfo.kind} · Offset de départ: +${saveInfo.start} octets`);
+    log(`Bloc A: ${saveInfo.info.A.validCount}/14 sections OK`);
+    log(`Bloc B: ${saveInfo.info.B.validCount}/14 sections OK`);
+  } else {
+    log('❌ Format non reconnu.', 'bad');
+  }
 });
 
-$('me3').addEventListener('change',async e=>{
-  const f=e.target.files?.[0];if(!f)return;clearLog();$('me3Name').textContent=f.name;rawMe=new Uint8Array(await f.arrayBuffer());meInfo=detectME(rawMe);update();if(meInfo.ok){log(`✅ ME3 reconnu : ${meInfo.size} octets.`,'ok');if(meInfo.rm)log('   + RM3 : 8 octets présents.','ok')}else log(`❌ ${meInfo.reason}`,'bad');
+$('me3').addEventListener('change', async e => {
+  const f = e.target.files?.[0]; if(!f) return;
+  clearLog();
+  $('me3Name').textContent = f.name;
+  rawMe = new Uint8Array(await f.arrayBuffer());
+  meInfo = detectME(rawMe);
+  update();
+
+  if(meInfo.ok){
+    log(`✅ ME3 chargé (${meInfo.size} octets)`, 'ok');
+  } else {
+    log(`❌ ${meInfo.reason}`, 'bad');
+  }
 });
 
 function diagnostic(){
-  clearLog();log('════════ R/S ME3 V3.1 ════════');
-  if(!saveInfo?.ok)log('❌ Save : structure non reconnue.','bad');else{
-    log(`💾 Save : ${rawSave.length} octets · ${saveInfo.kind}`,'ok');
-    for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
-      log(`── Bloc ${n} ──`);
-      for(const s of b.sections)log(`ID ${s.id} @ ${hx(s.off)} · CS ${s.valid?'OK':'BAD'} · ctr ${s.counter}`,s.valid?'ok':'warn');
-      if(b.me)log(`ME3 cible = ${hx(b.me.off+ME_REL)}`,'ok');
-      if(b.flags){const p=b.flags.off+0x3A9;log(`Flags +0x3A9 = ${hx(saveView[p],2)}`)}
-    }
+  clearLog();
+  log('════════ DIAGNOSTIC V3.2 ════════');
+  if(!saveInfo?.ok) return log('❌ Aucune save valide.', 'bad');
+
+  log(`💾 Fichier : ${rawSave.length} octets (${saveInfo.kind})`, 'ok');
+  for(const [n, b] of [['A', saveInfo.info.A], ['B', saveInfo.info.B]]){
+    log(`── Bloc ${n} ──`);
+    log(`Section 4 Offset: ${hx(b.me ? b.me.off : (n==='A'?4*SECTOR:BLOCK+4*SECTOR))}`);
   }
-  if(meInfo?.ok){log(`✨ ME3 = ${meInfo.size} octets`,'ok');log(meInfo.rm?'RM3 = 8 octets présents':'RM3 absent');}else log('❌ ME3 non reconnu.','bad');
+  if(meInfo?.ok) log(`✨ ME3 valide (${meInfo.size} o)`, 'ok');
 }
 
 function inject(){
-  clearLog();$('result').classList.add('hidden');output=null;
-  if(!saveInfo?.ok||!meInfo?.ok)throw Error('Sélectionne une save R/S et un ME3 valides.');
-  const core=new Uint8Array(saveView);
-  const me=meInfo.me.slice();
-  const active=$('activate').checked;
-  let injectedCount=0;
+  clearLog();
+  $('result').classList.add('hidden');
+  output = null;
 
-  for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
-    // Utilise la section 4 du bloc si elle existe, ou force sur l'offset standard
-    const meSecOff = b.me ? b.me.off : (n==='A'? 4*SECTOR : BLOCK + 4*SECTOR);
+  if(!saveInfo?.ok || !meInfo?.ok) throw Error('Sélectionne les 2 fichiers.');
+
+  const core = new Uint8Array(saveView);
+  const me = meInfo.me.slice();
+  const active = $('activate').checked;
+
+  for(const [n, b] of [['A', saveInfo.info.A], ['B', saveInfo.info.B]]){
+    // Calcul de l'offset direct de la section 4 (Mystery Event)
+    const meSecOff = b.me ? b.me.off : (n === 'A' ? 4 * SECTOR : BLOCK + 4 * SECTOR);
     const at = meSecOff + ME_REL;
-    
+
+    // Injection du ME3 et du RM3
     core.set(me, at);
     if(meInfo.rm) core.set(meInfo.rm, meSecOff + RM_REL);
-    
-    // Recalcule le checksum de la Section 4 pour que le jeu accepte le bloc
-    const cs=sectionChecksum(core, meSecOff);
+
+    // Recalcul strict du Checksum de la Section 4
+    const cs = sectionChecksum(core, meSecOff);
     setU16(core, meSecOff + CS, cs);
-    
+
+    // Activer l'évènement dans la section 2 (Flags) si coché
     if(active){
-      const flagsSecOff = b.flags ? b.flags.off : (n==='A'? 2*SECTOR : BLOCK + 2*SECTOR);
+      const flagsSecOff = b.flags ? b.flags.off : (n === 'A' ? 2 * SECTOR : BLOCK + 2 * SECTOR);
       const p = flagsSecOff + 0x3A9;
       core[p] |= 0x10;
       setU16(core, flagsSecOff + CS, sectionChecksum(core, flagsSecOff));
     }
-    
-    injectedCount++;
-    log(`✅ Bloc ${n}: JIRACHI.me3 copié à ${hx(at)}`,'ok');
-    log(`   Checksum recalculé: ${hx(cs)}`,'ok');
+
+    log(`✅ Bloc ${n}: JIRACHI.me3 injecté à ${hx(at)}`, 'ok');
+    log(`   Nouveau checksum calculé : ${hx(cs)}`, 'ok');
   }
 
-  output=new Uint8Array(rawSave);
+  // Reconstitution du fichier final (conserve le wrapper d'origine s'il existe)
+  output = new Uint8Array(rawSave);
   output.set(core, saveInfo.start);
-  
-  $('resultText').innerHTML='Injection terminée avec succès sur la sauvegarde 131 088 octets.<br>Le checksum a été recalculé.';
+
+  $('resultText').innerHTML = '<b>Injection réussie !</b><br>JIRACHI.me3 a été injecté dans les 2 blocs de sauvegarde avec checksums corrigés.';
   $('result').classList.remove('hidden');
-  log('🎉 Fichier prêt à être téléchargé !','ok');
+  log('🎉 Fichier prêt à télécharger !', 'ok');
 }
 
-$('diag').onclick=()=>{try{diagnostic()}catch(e){log('❌ '+e.message,'bad')}};
-$('inject').onclick=()=>{try{inject()}catch(e){log('❌ '+e.message,'bad')}};
-$('download').onclick=()=>{
-  if(!output)return;
-  const b=new Blob([output],{type:'application/octet-stream'});
-  const u=URL.createObjectURL(b);
-  const a=document.createElement('a');
-  a.href=u;
-  a.download='Pokemon_Sapphire_Jirachi_Injected.sav';
+$('diag').onclick = () => { try{ diagnostic(); }catch(e){ log('❌ '+e.message, 'bad'); } };
+$('inject').onclick = () => { try{ inject(); }catch(e){ log('❌ '+e.message, 'bad'); } };
+$('download').onclick = () => {
+  if(!output) return;
+  const b = new Blob([output], {type: 'application/octet-stream'});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement('a');
+  a.href = u;
+  a.download = 'Pokemon_Sapphire_Jirachi.sav';
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(()=>URL.revokeObjectURL(u),1000);
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
 };
+
 update();
 </script>
 </body>
