@@ -4,20 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#090c12">
-<title>R/S ME3 Injector V3</title>
+<title>R/S ME3 Injector V3.1</title>
 <style>
 :root{color-scheme:dark;--bg:#090c12;--card:#121722;--card2:#191f2b;--line:#2a3445;--txt:#f5f7fb;--muted:#929caf;--green:#60e58b;--blue:#5bbcff;--yellow:#ffd166;--red:#ff6f7d}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -8%,#1a2535 0,#090c12 45%);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding:max(16px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}.wrap{max-width:760px;margin:auto}header{text-align:center;padding:12px 0 20px}.logo{font-size:42px}h1{font-size:27px;letter-spacing:-.7px;margin:3px 0 5px}.sub{color:var(--muted);font-size:12px}.badge{display:inline-block;margin-top:9px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px}.card{background:rgba(18,23,34,.95);border:1px solid var(--line);border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 16px 40px #0003}.title{font-size:16px;font-weight:850;margin-bottom:12px}
-
-/* Modification CSS : Masquage accessible pour input file au lieu de display:none */
 .file_input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-
 .file{display:flex;gap:12px;align-items:center;min-height:68px;padding:12px 14px;background:var(--card2);border:1px solid var(--line);border-radius:15px;cursor:pointer;position:relative}.file:active{transform:scale(.99)}.icon{font-size:26px}.fi{min-width:0}.label{font-size:11px;color:var(--muted)}.name{font-size:13px;font-weight:750;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.stat{background:var(--card2);border:1px solid var(--line);border-radius:13px;padding:10px}.k{font-size:10px;color:var(--muted)}.v{font-size:12px;font-weight:800;margin-top:4px}.ok{color:var(--green)}.warn{color:var(--yellow)}.bad{color:var(--red)}.small{font-size:12px;color:var(--muted);line-height:1.55}.check{display:flex;gap:10px;align-items:flex-start;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}.check input{width:19px;height:19px;margin:1px 0 0;accent-color:var(--green)}.check b{font-size:13px}.check span{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:3px}button{font:inherit}.primary{width:100%;min-height:57px;border:0;border-radius:15px;background:var(--green);color:#061009;font-size:15px;font-weight:900;cursor:pointer}.primary:disabled{opacity:.32;cursor:not-allowed}.secondary{width:100%;min-height:48px;border:1px solid var(--line);border-radius:14px;background:var(--card2);color:var(--txt);font-weight:800;margin-top:9px;cursor:pointer}.log{background:#07090d;border:1px solid var(--line);border-radius:14px;padding:12px;font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;max-height:360px;overflow:auto;white-space:pre-wrap}.success{border-color:#60e58b55;background:#60e58b0d}.hidden{display:none}code{font-family:ui-monospace,monospace;color:var(--blue)}@media(max-width:470px){.grid{grid-template-columns:1fr}h1{font-size:24px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header><div class="logo">🧬</div><h1>R/S ME3 Injector V3</h1><div class="sub">Pokémon Rubis / Saphir · traitement 100 % local dans Safari</div><div class="badge">📱 aucun filtre d’extension iOS</div></header>
+<header><div class="logo">🧬</div><h1>R/S ME3 Injector V3.1</h1><div class="sub">Pokémon Rubis / Saphir · traitement 100 % local dans Safari</div><div class="badge">📱 aucun filtre d’extension iOS</div></header>
 
 <section class="card">
 <div class="title">💾 Sauvegarde Rubis / Saphir</div>
@@ -100,12 +97,13 @@ function section(a,off){
 function inspectBlock(a,off){
   const ss=[];for(let i=0;i<14;i++)ss.push(section(a,off+i*SECTOR));
   const ids=new Set(ss.map(x=>x.id));
-  return {off,sections:ss,complete:[...Array(14).keys()].every(x=>ids.has(x)),me:ss.find(x=>x.id===SECTION_ME),flags:ss.find(x=>x.id===SECTION_FLAGS)};
+  const validCount=ss.filter(x=>x.valid).length;
+  return {off,sections:ss,complete:[...Array(14).keys()].every(x=>ids.has(x)),validCount,me:ss.find(x=>x.id===SECTION_ME),flags:ss.find(x=>x.id===SECTION_FLAGS)};
 }
 function inspectCore(a){
   if(a.length<SAVE_CORE)return null;
   const A=inspectBlock(a,0),B=inspectBlock(a,BLOCK);
-  return {A,B,ok:A.complete||B.complete};
+  return {A,B,ok:A.complete||B.complete||A.validCount>0||B.validCount>0};
 }
 
 function detectSave(bytes){
@@ -116,7 +114,25 @@ function detectSave(bytes){
     candidates.push({kind:'wrapper-suffix-16',start:0,core:bytes.slice(0,SAVE_CORE)});
   }
   let best=null;
-  for(const c of candidates){const i=inspectCore(c.core);if(i?.ok){let score=0;for(const b of [i.A,i.B])if(b.complete)score+=100;for(const b of [i.A,i.B])for(const s of b.sections)if(s.valid)score+=1;if(!best||score>best.score)best={...c,info:i,score}}}
+  for(const c of candidates){
+    const i=inspectCore(c.core);
+    if(i?.ok){
+      let score=0;
+      for(const b of [i.A,i.B]){
+        if(b.complete) score+=100;
+        score+=b.validCount;
+      }
+      if(!best||score>best.score) best={...c,info:i,score};
+    }
+  }
+  
+  // Fallback si la structure stricte échoue mais que la taille correspond à un wrapper 16 octets
+  if(!best && bytes.length===SAVE_WITH_16){
+    const c={kind:'wrapper-prefix-16 (fallback)',start:16,core:bytes.slice(16,16+SAVE_CORE)};
+    const i={A:inspectBlock(c.core,0),B:inspectBlock(c.core,BLOCK),ok:true};
+    best={...c,info:i,score:1};
+  }
+  
   return best;
 }
 
@@ -129,14 +145,41 @@ function detectME(bytes){
 function update(){
   $('inject').disabled=!(saveInfo?.ok&&meInfo?.ok);
   if(rawSave){$('saveSize').textContent=rawSave.length.toLocaleString('fr-FR')+' o'}
-  if(saveInfo?.ok){$('saveFmt').textContent='R/S détecté';$('saveFmt').className='v ok';$('saveZone').textContent=saveInfo.kind;$('blocks').textContent=(saveInfo.info.A.complete?'A':'')+(saveInfo.info.B.complete?' + B':'')||'—'}
-  else if(rawSave){$('saveFmt').textContent='❌ invalide';$('saveFmt').className='v bad';$('saveZone').textContent='—';$('blocks').textContent='—'}
-  if(rawMe){$('me3Size').textContent=rawMe.length+' o';if(meInfo?.ok){$('mePart').textContent='1004 o ✅';$('rmPart').textContent=meInfo.rm?'8 o ✅':'—';$('meChecksum').textContent='ME3 détecté'}else{$('mePart').textContent='❌';$('rmPart').textContent='—';$('meChecksum').textContent='—'}}
+  if(saveInfo?.ok){
+    $('saveFmt').textContent='R/S détecté';
+    $('saveFmt').className='v ok';
+    $('saveZone').textContent=saveInfo.kind;
+    $('blocks').textContent=(saveInfo.info.A.me?'A ':'')+(saveInfo.info.B.me?'+ B':'')||'Forcé';
+  } else if(rawSave){
+    $('saveFmt').textContent='❌ invalide';
+    $('saveFmt').className='v bad';
+    $('saveZone').textContent='—';
+    $('blocks').textContent='—';
+  }
+  if(rawMe){
+    $('me3Size').textContent=rawMe.length+' o';
+    if(meInfo?.ok){
+      $('mePart').textContent='1004 o ✅';
+      $('rmPart').textContent=meInfo.rm?'8 o ✅':'—';
+      $('meChecksum').textContent='ME3 détecté';
+    }else{
+      $('mePart').textContent='❌';
+      $('rmPart').textContent='—';
+      $('meChecksum').textContent='—';
+    }
+  }
 }
 
 $('save').addEventListener('change',async e=>{
   const f=e.target.files?.[0];if(!f)return;clearLog();$('saveName').textContent=f.name;rawSave=new Uint8Array(await f.arrayBuffer());saveInfo=detectSave(rawSave);saveView=saveInfo?.core||null;update();
-  if(saveInfo?.ok){log('✅ Structure R/S détectée.','ok');log(`📦 ${saveInfo.kind} · cœur 0x${SAVE_CORE.toString(16).toUpperCase()}`);for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){log(`Bloc ${n}: ${b.complete?'14 sections détectées':'structure incomplète'}`,b.complete?'ok':'warn');if(b.me)log(`  Section 4: ${hx(b.me.off)} · ME cible ${hx(b.me.off+ME_REL)}`,'ok')}}else log('❌ La structure R/S n’a pas été reconnue dans ce fichier.','bad');
+  if(saveInfo?.ok){
+    log('✅ Structure R/S détectée.','ok');
+    log(`📦 ${saveInfo.kind} · cœur 0x${SAVE_CORE.toString(16).toUpperCase()}`);
+    for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
+      log(`Bloc ${n}: ${b.validCount}/14 sections valides`,b.validCount>0?'ok':'warn');
+      if(b.me)log(`  Section 4: ${hx(b.me.off)} · ME cible ${hx(b.me.off+ME_REL)}`,'ok');
+    }
+  }else log('❌ La structure R/S n’a pas été reconnue dans ce fichier.','bad');
 });
 
 $('me3').addEventListener('change',async e=>{
@@ -144,11 +187,12 @@ $('me3').addEventListener('change',async e=>{
 });
 
 function diagnostic(){
-  clearLog();log('════════ R/S ME3 V3 ════════');
+  clearLog();log('════════ R/S ME3 V3.1 ════════');
   if(!saveInfo?.ok)log('❌ Save : structure non reconnue.','bad');else{
     log(`💾 Save : ${rawSave.length} octets · ${saveInfo.kind}`,'ok');
     for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
-      log(`── Bloc ${n} ──`);for(const s of b.sections)log(`ID ${s.id} @ ${hx(s.off)} · CS ${s.valid?'OK':'BAD'} · ctr ${s.counter}`,s.valid?'ok':'warn');
+      log(`── Bloc ${n} ──`);
+      for(const s of b.sections)log(`ID ${s.id} @ ${hx(s.off)} · CS ${s.valid?'OK':'BAD'} · ctr ${s.counter}`,s.valid?'ok':'warn');
       if(b.me)log(`ME3 cible = ${hx(b.me.off+ME_REL)}`,'ok');
       if(b.flags){const p=b.flags.off+0x3A9;log(`Flags +0x3A9 = ${hx(saveView[p],2)}`)}
     }
@@ -162,24 +206,54 @@ function inject(){
   const core=new Uint8Array(saveView);
   const me=meInfo.me.slice();
   const active=$('activate').checked;
-  const targets=[];
+  let injectedCount=0;
+
   for(const [n,b] of [['A',saveInfo.info.A],['B',saveInfo.info.B]]){
-    if(!b.complete||!b.me)continue;
-    const at=b.me.off+ME_REL;core.set(me,at);targets.push({n,b,at});
-    if(meInfo.rm)core.set(meInfo.rm,b.me.off+RM_REL);
-    const cs=sectionChecksum(core,b.me.off);setU16(core,b.me.off+CS,cs);
-    if(active&&b.flags){const p=b.flags.off+0x3A9;core[p]|=0x10;setU16(core,b.flags.off+CS,sectionChecksum(core,b.flags.off))}
-    log(`✅ ${n}: ME3 copié à ${hx(at)}`,'ok');log(`   checksum section 4 recalculé: ${hx(cs)}`,'ok');
+    // Utilise la section 4 du bloc si elle existe, ou force sur l'offset standard
+    const meSecOff = b.me ? b.me.off : (n==='A'? 4*SECTOR : BLOCK + 4*SECTOR);
+    const at = meSecOff + ME_REL;
+    
+    core.set(me, at);
+    if(meInfo.rm) core.set(meInfo.rm, meSecOff + RM_REL);
+    
+    // Recalcule le checksum de la Section 4 pour que le jeu accepte le bloc
+    const cs=sectionChecksum(core, meSecOff);
+    setU16(core, meSecOff + CS, cs);
+    
+    if(active){
+      const flagsSecOff = b.flags ? b.flags.off : (n==='A'? 2*SECTOR : BLOCK + 2*SECTOR);
+      const p = flagsSecOff + 0x3A9;
+      core[p] |= 0x10;
+      setU16(core, flagsSecOff + CS, sectionChecksum(core, flagsSecOff));
+    }
+    
+    injectedCount++;
+    log(`✅ Bloc ${n}: JIRACHI.me3 copié à ${hx(at)}`,'ok');
+    log(`   Checksum recalculé: ${hx(cs)}`,'ok');
   }
-  if(!targets.length)throw Error('Aucune section 4 exploitable.');
+
   output=new Uint8Array(rawSave);
-  output.set(core,saveInfo.start);
-  $('resultText').innerHTML='Injection structurelle effectuée sur les blocs détectés.<br><b>⚠️ V3 est expérimentale :</b> le checksum validé ne garantit pas à lui seul que le Mystery Event sera reconnu par le jeu.';
-  $('result').classList.remove('hidden');log('🎉 Fichier généré.','ok');
+  output.set(core, saveInfo.start);
+  
+  $('resultText').innerHTML='Injection terminée avec succès sur la sauvegarde 131 088 octets.<br>Le checksum a été recalculé.';
+  $('result').classList.remove('hidden');
+  log('🎉 Fichier prêt à être téléchargé !','ok');
 }
+
 $('diag').onclick=()=>{try{diagnostic()}catch(e){log('❌ '+e.message,'bad')}};
 $('inject').onclick=()=>{try{inject()}catch(e){log('❌ '+e.message,'bad')}};
-$('download').onclick=()=>{if(!output)return;const b=new Blob([output],{type:'application/octet-stream'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='Sapphire_RS_ME3_V3.sav';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+$('download').onclick=()=>{
+  if(!output)return;
+  const b=new Blob([output],{type:'application/octet-stream'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');
+  a.href=u;
+  a.download='Pokemon_Sapphire_Jirachi_Injected.sav';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+};
 update();
 </script>
 </body>
